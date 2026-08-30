@@ -309,7 +309,8 @@ module text_engrave() {
     ov = 0.3;
 
     intersection() {
-        xz_extrude(-ov, text_depth + ov) {
+        xz_extrude(-ov, text_depth + ov)
+        translate([p1_cx, H / 2]) rotate(180) translate([-p1_cx, -H / 2]) {
             union() {
                 if (n > 0)
                     for (i = [0:n - 1])
