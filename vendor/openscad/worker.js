@@ -19,10 +19,29 @@ const FONTS_CONF = `<?xml version="1.0"?>
   <cachedir>/tmp/fontcache</cachedir>
 </fontconfig>`;
 
+/* Движок лежит в репозитории двумя кусками: цельный файл на 13.9 МБ не
+   проходит через веб-загрузку файлов, поэтому он разрезан пополам и
+   склеивается здесь, в браузере. Модуль импортируется из blob: URL —
+   движок самодостаточен (wasm зашит внутрь, import.meta не используется),
+   так что смена базового адреса на него никак не влияет. */
+const ENGINE_PARTS = ["./openscad.part1.js", "./openscad.part2.js"];
+
+async function loadEngine(){
+  const base = new URL("./", import.meta.url);
+  const parts = await Promise.all(ENGINE_PARTS.map(async p => {
+    const r = await fetch(new URL(p, base));
+    if(!r.ok) throw new Error("движок не загрузился: " + p);
+    return r.text();
+  }));
+  const url = URL.createObjectURL(new Blob(parts, {type:"text/javascript"}));
+  try { return await import(url); }
+  finally { URL.revokeObjectURL(url); }
+}
+
 let ready = null;
 
 async function boot(){
-  const { createOpenSCAD } = await import("./openscad.js");
+  const { createOpenSCAD } = await loadEngine();
   const oscad = await createOpenSCAD({
     printErr: t => {
       // «Cannot load default config file» приходит всегда и ни на что не
