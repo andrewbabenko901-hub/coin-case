@@ -2418,6 +2418,16 @@ function cssRGB(v){
   return _hexRGB(v);
 }
 const mix = (a, b, t) => [a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t, a[2]+(b[2]-a[2])*t];
+const lum = c => 0.2126*c[0] + 0.7152*c[1] + 0.0722*c[2];
+/* Цвет материала для объёма. В тёмной теме деталь почти чёрная: на чертеже
+   это нормально — там работают линии и заливки, — а объёмная модель
+   превращается в силуэт, светотень на ней не читается. Поэтому неокрашенный
+   материал подтягивается к середине яркости. Выбранный пользователем цвет не
+   трогаем: он выбран осознанно. */
+function material(c){
+  const L = lum(c);
+  return L < 0.42 ? mix(c, [1,1,1], (0.52 - L)/Math.max(1 - L, 0.01)) : c;
+}
 
 
 /* ---------- гравировка: контуры букв и иконки ----------
@@ -2653,17 +2663,17 @@ function meshHalf(M, m, part, engSet, C){
 /* ---------- сборка ---------- */
 function buildMesh(m, engSet){
   _varRGB = {};
+  const own = k => state.colors && state.colors[k];
   const C = {
-    lid:   cssRGB(colorOf("lid",  "var(--part)")),
-    base:  cssRGB(colorOf("base", "var(--part)")),
-    brass: cssRGB("var(--brass-soft)"),
-    pin:   cssRGB("var(--brass)"),
-    gold:  cssRGB("var(--gold)")
+    lid:   own("lid")  ? cssRGB(own("lid"))  : material(cssRGB("var(--part)")),
+    base:  own("base") ? cssRGB(own("base")) : material(cssRGB("var(--part)")),
+    brass: material(cssRGB("var(--brass-soft)")),
+    pin:   material(cssRGB("var(--brass)")),
+    gold:  material(cssRGB("var(--gold)"))
   };
   const eng = (engSet || []).map(it => ({
     rings: it.rings, key: it.key,
-    col: state.colors && state.colors[it.key]
-      ? cssRGB(state.colors[it.key]) : mix(C.lid, [0,0,0], 0.42)
+    col: own(it.key) ? cssRGB(own(it.key)) : mix(C.lid, [0,0,0], 0.42)
   }));
   const M = meshNew();
   // Закрытый вид — поворот крышки на 180° вокруг оси петли. Преобразование
