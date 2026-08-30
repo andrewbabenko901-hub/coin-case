@@ -1,0 +1,4 @@
+# Движок OpenSCAD — один большой файл, помечаем бинарным, чтобы git не пытался
+# считать по нему построчные различия.
+vendor/openscad/openscad.js -diff -text
+vendor/fonts/*.ttf binary
