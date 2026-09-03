@@ -5227,8 +5227,9 @@ function d3Knob(){
   if(!sc){ kn.hidden = true; return; }
   const cv = D3.cv;
   kn.hidden = false;
-  kn.style.left = (cv.offsetLeft + sc[0]) + "px";
-  kn.style.top  = (cv.offsetTop  + sc[1]) + "px";
+  const M = 26;
+  kn.style.left = (cv.offsetLeft + clamp(sc[0], M, Math.max(cv.clientWidth - M, M))) + "px";
+  kn.style.top  = (cv.offsetTop  + clamp(sc[1], M, Math.max(cv.clientHeight - M, M))) + "px";
   kn.title = T_("d3_lid") + " — " + lidLabel();
 }
 function lidLabel(){
@@ -5314,14 +5315,17 @@ function d3Lift(){
   if(!kn) return;
   const pv = insPivot();
   if(!pv){ kn.hidden = true; return; }
-  const up = Math.max(pv.r*0.55, 7);
+  const up = Math.min(Math.max(pv.r*0.55, 7), 14);
   const sc = d3Project([pv.p[0] + pv.up[0]*up, pv.p[1] + pv.up[1]*up,
                         pv.p[2] + pv.up[2]*up]);
   if(!sc){ kn.hidden = true; return; }
   const cv = D3.cv;
   kn.hidden = false;
-  kn.style.left = (cv.offsetLeft + sc[0]) + "px";
-  kn.style.top  = (cv.offsetTop  + sc[1]) + "px";
+  // Шайба не уходит за край окна: даже если точка привязки уехала, взяться
+  // за неё должно быть можно.
+  const M = 26;
+  kn.style.left = (cv.offsetLeft + clamp(sc[0], M, Math.max(cv.clientWidth - M, M))) + "px";
+  kn.style.top  = (cv.offsetTop  + clamp(sc[1], M, Math.max(cv.clientHeight - M, M))) + "px";
   kn.title = T_("d3_lift") + " — " + fmt(INS_LIFT) + " " + T_("mm");
 }
 function d3LiftBind(){
@@ -8419,8 +8423,12 @@ function cardInsSpot(m){
   if(m.ty === 3){
     const g = cardInsGeom(m);
     if(!g) return null;
+    // Рукоятка садится на СЕРЕДИНУ карточки, а не на её макушку: карточка
+    // вчетверо длиннее подставки, и от макушки шайба уезжала за край окна.
     // Подставка ставится на стол общим преобразованием меша: (x, z, −y).
-    return {p:[0, g.spot[1], -g.spot[0]], up:[0, g.up[1], -g.up[0]],
+    const mid = [g.spot[0] - g.up[0]*s.holder_h/2,
+                 g.spot[1] - g.up[1]*s.holder_h/2];
+    return {p:[0, mid[1], -mid[0]], up:[0, g.up[1], -g.up[0]],
             r:Math.max(s.holder_w, 8)/2};
   }
   const sl = cardInsSlabs(m);
