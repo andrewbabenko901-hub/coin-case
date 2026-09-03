@@ -35,6 +35,9 @@
   --coin:#6E7C85;
   --gold:#D8A93C;--gold-dark:#A97F22;--gold-edge:#7A5A16;
   --silver:#C6CBD0;--silver-dark:#9AA1A8;--silver-edge:#6C747C;
+  /* Сам холдер: пластик, картонка карточки и её картинка, ярлык слаба. */
+  --holder:#BFD3D8;--holder-edge:#7C99A0;
+  --card-stock:#F0E8D8;--card-edge:#B7A98C;--card-art:#7C93A6;--label:#FAFAF6;
   --side:#DEE5E4;--hollow:#CCDFDC;--hollow-side:#B5CECA;--tipbg:#F6F8F7EE;
   --cut:#D6DEDE;
   --part:#EFF3F1;
@@ -52,6 +55,8 @@
     --gold:#E8C061;--gold-dark:#A9873A;--gold-edge:#F0D28C;
     --side:#182022;--hollow:#16302E;--hollow-side:#102422;--tipbg:#0E1618EE;
     --cut:#1E282A;
+  --holder:#8FB4BC;--holder-edge:#C3DBE0;
+  --card-stock:#E4DCCA;--card-edge:#8C7F63;--card-art:#6E869A;--label:#F2F2EC;
     --shadow:0 1px 2px rgba(0,0,0,.5),0 10px 26px -14px rgba(0,0,0,.8);
   }
 }
@@ -63,6 +68,8 @@
   --gold:#E8C061;--gold-dark:#A9873A;--gold-edge:#F0D28C;
   --side:#182022;--hollow:#16302E;--hollow-side:#102422;--tipbg:#0E1618EE;
   --cut:#1E282A;
+  --holder:#8FB4BC;--holder-edge:#C3DBE0;
+  --card-stock:#E4DCCA;--card-edge:#8C7F63;--card-art:#6E869A;--label:#F2F2EC;
   --shadow:0 1px 2px rgba(0,0,0,.5),0 10px 26px -14px rgba(0,0,0,.8);
 }
 *{box-sizing:border-box}
@@ -3190,19 +3197,25 @@ function drawOpenCase(g, P, m, cls){
                           .filter(x => x.notch),
       m.T, Math.min(s.finger_notch_depth, m.T - 0.2), s.finger_notch_fillet, cls);
   if(s.show_coin){
-    if(isFlat(P)){
+    // Монета видна ровно через устье кармана и не шире: без обрезки её
+    // боковой поясок наползал на вырезы под пальцы, и в изометрии казалось,
+    // что диск и выемка пересекаются как попало.
+    const mouth = shapePaths([cavityShapes(m, m.p2cx, m.cz, false, -1)[0]], 130);
+    const gcoin = (!isFlat(P) && mouth.length === 1)
+      ? clipToFace(g, pjRing(P, mouth[0], m.T)) : g;
+    if(m.ins){
+      // В кейсе для карточки лежит НАСТОЯЩИЙ холдер — тот же силуэт, что
+      // и в объёме: с устьем, ярлыком или магнитами, и карточкой внутри.
+      const S = holderShape(s, cardState.preset), w0 = m.T - m.baseD;
+      holderPaint(gcoin, P, S, cls,
+        (x, y, z) => [m.p2cx + x, m.cz + z - S.H/2, w0 + y]);
+    } else if(isFlat(P)){
       // На чертеже монета показывается прозрачным диском: сплошной закрывал
       // и обод полости, и вырезы под пальцы — а именно их и надо видеть.
       el("polygon", {points:pstr(pjRing(P, insertRing(m, m.p2cx, m.cz), m.T)),
         fill:coinCol().fill, opacity:"0.42", stroke:coinCol().edge,
         "stroke-width":cls.sw, "stroke-dasharray":fmt(cls.sw*4)+" "+fmt(cls.sw*3)}, g);
     } else {
-      // Монета видна ровно через устье кармана и не шире: без обрезки её
-      // боковой поясок наползал на вырезы под пальцы, и в изометрии казалось,
-      // что диск и выемка пересекаются как попало.
-      const mouth = shapePaths([cavityShapes(m, m.p2cx, m.cz, false, -1)[0]], 130);
-      const gcoin = mouth.length === 1
-        ? clipToFace(g, pjRing(P, mouth[0], m.T)) : g;
       disc(gcoin, P, insertRing(m, m.p2cx, m.cz), m.T - m.baseD,
         m.T - m.baseD + m.ins_t, cls, coinCol().fill, coinCol().edge, true);
     }
@@ -3566,7 +3579,9 @@ function insertCard(host, rect, m, cls, PAN){
   const s = state;
   const [rx, ry, rw, rh] = rect;
   // Вдвое меньше прежнего и без рамки: рисунок сам себе граница.
-  const box = Math.min(rw*0.18, rh*0.23, 92);
+  // Врезка подросла: раньше в ней лежал просто диск, а теперь настоящий
+  // холдер — его форму надо видеть, а не угадывать.
+  const box = Math.min(rw*0.22, rh*0.27, 116);
   if(box < 40) return;                       // в тесной панели врезке не место
   const x0 = rx + 18, y0 = ry + rh - box - 26;
   // Подложка: не рамка, а опора — заливка карточки без обводки. Накрывает и
@@ -3602,7 +3617,7 @@ function insertCard(host, rect, m, cls, PAN){
   }
   const P0 = PROJ.iso, t = m.ins_t;
   // Кадрируем по спроецированным углам самой вставки — с запасом на рукоятки.
-  const pad = Math.max(hx, hy)*0.30;
+  const pad = Math.max(hx, hy)*0.20;
   const corners = [];
   for(const u of [-hx - pad, hx + pad]) for(const v of [-hy - pad, hy + pad])
     for(const w of [0, t + pad]) corners.push(pj(P0, u, v, w));
@@ -3619,28 +3634,34 @@ function insertCard(host, rect, m, cls, PAN){
              toCanvas:(u, v, w) => { const q = pj(P0, u, v, w || 0);
                                      return [tx + q[0]*sc, ty + q[1]*sc]; }};
   const cls2 = {sw:Math.max(hx, hy)/70};
-  disc(gg, P0, ring, 0, Math.max(t, 0.05), cls2,
-       coinCol().fill, coinCol().edge, true);
+  // У карточки во врезке рисуется НАСТОЯЩИЙ холдер: топлоадер с устьем,
+  // one-touch со срезанными углами, слаб с ярлыком. Монета остаётся диском.
+  if(m.ins){
+    const S = holderShape(s, cardState.preset);
+    holderPaint(gg, P0, S, cls2, (x, y, z) => [x, z - S.H/2, y]);
+  }
+  else disc(gg, P0, ring, 0, Math.max(t, 0.05), cls2,
+            coinCol().fill, coinCol().edge, true);
 
   // Рукоятки: вбок — длина, вверх — толщина, у карточки ещё высота.
   const wKey = m.ins ? "holder_w" : "coin_d";
   const wHi  = m.ins ? 200 : 150;
   const w0v  = state[wKey];
-  handle(P, "ins_w", hx, 0, t, {axis:"u", arrow:"r",
+  handle(P, "ins_w", hx + pad*0.5, 0, t*0.5, {axis:"u", arrow:"r",
     tip:T_(m.ins ? "f_holder_w" : "f_coin_d") + " " + fmt(state[wKey]),
     val:() => state[wKey], set:v => { state[wKey] = clamp(v, 5, wHi); },
     move:d => { state[wKey] = clamp(q1(w0v + 2*d, 0.5), 5, wHi); }});
   const tKey = m.ins ? "holder_t" : "coin_t";
   const tHi  = m.ins ? 30 : 25;
   const t0v  = state[tKey];
-  handle(P, "ins_t", -hx*0.55, 0, t, {axis:"w", arrow:"v",
+  handle(P, "ins_t", -hx - pad*0.5, -hy*0.35, t, {axis:"w", arrow:"v",
     tip:T_(m.ins ? "f_holder_t" : "f_coin_t") + " " + fmt(state[tKey]),
     val:() => state[tKey], set:v => { state[tKey] = clamp(v, 0.3, tHi); },
     move:d => { state[tKey] = clamp(q1(t0v + d, 0.1), 0.3, tHi); }});
   // Шаг у толщины мельче: там разница в десятую уже заметна на посадке.
   if(m.ins){
     const h0v = state.holder_h;
-    handle(P, "ins_h", 0, hy, t, {axis:"v", arrow:"v",
+    handle(P, "ins_h", 0, hy + pad*0.5, t*0.5, {axis:"v", arrow:"v",
       tip:T_("f_holder_h") + " " + fmt(state.holder_h),
       val:() => state.holder_h, set:v => { state.holder_h = clamp(v, 20, 260); },
       move:d => { state.holder_h = clamp(q1(h0v + 2*d, 0.5), 20, 260); }});
@@ -4214,7 +4235,10 @@ function facePlan(outer, holes){
    тащится параметром через все helper'ы: иначе он был бы в подписи каждой
    функции, а меняется он ровно пять раз за сборку. */
 let _mk = null;
-function meshNew(){ return {p:[], n:[], c:[], k:[]}; }
+// Прозрачность куска. Пластик холдера просвечивает — сквозь него видно
+// карточку; всё остальное непрозрачно и живёт при единице.
+let _ma = 1;
+function meshNew(){ return {p:[], n:[], c:[], k:[], a:[]}; }
 function meshTri(M, a, b, c, col){
   if(M.xf){ a = M.xf(a); b = M.xf(b); c = M.xf(c); }
   const ux=b[0]-a[0], uy=b[1]-a[1], uz=b[2]-a[2];
@@ -4222,7 +4246,7 @@ function meshTri(M, a, b, c, col){
   let nx = uy*vz-uz*vy, ny = uz*vx-ux*vz, nz = ux*vy-uy*vx;
   const L = Math.hypot(nx,ny,nz) || 1; nx/=L; ny/=L; nz/=L;
   M.p.push(a[0],a[1],a[2], b[0],b[1],b[2], c[0],c[1],c[2]);
-  for(let i=0;i<3;i++){ M.n.push(nx,ny,nz); M.c.push(col[0],col[1],col[2]); }
+  for(let i=0;i<3;i++){ M.n.push(nx,ny,nz); M.c.push(col[0],col[1],col[2]); M.a.push(_ma); }
   M.k.push(_mk);
 }
 const meshQuad = (M,a,b,c,d,col) => { meshTri(M,a,b,c,col); meshTri(M,a,c,d,col); };
@@ -4705,30 +4729,45 @@ function meshHalf(M, m, part, engSet, C){
     // Ответное гнездо рисуется вместе с кромкой — надрезом, а не ямкой
     // внутри лица (см. meshRimNotch выше).
     _mk = null;
-    if(s.show_coin){
-      // Монету можно приподнять над гнездом — видно, как она в него садится.
-      // Ключ "ins" даёт по ней взяться лучом и покрасить её кистью.
-      _mk = "ins";
-      const y0 = T - pd + INS_LIFT;
-      // Монета с гуртом: обод по краю, поле внутри чуть ниже.
-      const cr = insertRing(m, m.p2cx, m.cz);
-      const y1c = Math.min(y0 + m.ins_t, T + INS_LIFT);
-      const rimIn = (() => {
-        let sx = 0, sy = 0;
-        for(const q of cr){ sx += q[0]; sy += q[1]; }
-        sx /= cr.length; sy /= cr.length;
-        return cr.map(q => [sx + (q[0]-sx)*0.90, sy + (q[1]-sy)*0.90]);
-      })();
-      const dip = Math.min(0.18, Math.max(0.05, (y1c - y0)*0.14));
-      meshWall(M, cr, y0, y1c, C.gold);                       // гурт снаружи
-      for(const [yf, dir] of [[y1c, -1], [y0, +1]]){
-        meshFace(M, [faceRing(cr, rimIn)], yf, C.gold);        // кольцо обода
-        meshWall(M, rimIn, yf, yf + dir*dip, C.goldDark || C.gold);
-        meshFace(M, [faceTris(rimIn, [])], yf + dir*dip, C.gold);
-      }
-      _mk = null;
-    }
   }
+}
+/* Что лежит в кейсе: монета или холдер с карточкой. Рисуется ПОСЛЕ корпуса —
+   у холдера корпус полупрозрачный, и порядок держит второй проход. */
+function coinMeshInsert(M, m, C){
+  const s = state;
+  if(!s.show_coin) return;
+  const T = m.T, pd = m.baseD;
+  const prev = _mk; _mk = "ins";
+  if(m.ins){
+    // Карточку кладём тем же холдером, что и у карточных изделий.
+    const S = holderShape(s, cardState.preset);
+    const K = holderCols();
+    const y0 = T - pd + INS_LIFT;
+    const put = q => [m.p2cx + q[0], y0 + q[1], m.cz - S.H/2 + q[2]];
+    holderMeshPart(M, S, K, put, "in");
+    M.opaqueN = M.p.length/3;
+    holderMeshPart(M, S, K, put, "shell");
+    _mk = prev;
+    return;
+  }
+  const y0 = T - pd + INS_LIFT;
+  // Монета с гуртом: обод по краю, поле внутри чуть ниже.
+  const cr = insertRing(m, m.p2cx, m.cz);
+  const y1c = Math.min(y0 + m.ins_t, T + INS_LIFT);
+  const rimIn = (() => {
+    let sx = 0, sy = 0;
+    for(const q of cr){ sx += q[0]; sy += q[1]; }
+    sx /= cr.length; sy /= cr.length;
+    return cr.map(q => [sx + (q[0]-sx)*0.90, sy + (q[1]-sy)*0.90]);
+  })();
+  const dip = Math.min(0.18, Math.max(0.05, (y1c - y0)*0.14));
+  meshWall(M, cr, y0, y1c, C.gold);                       // гурт снаружи
+  for(const [yf, dir] of [[y1c, -1], [y0, +1]]){
+    meshFace(M, [faceRing(cr, rimIn)], yf, C.gold);        // кольцо обода
+    meshWall(M, rimIn, yf, yf + dir*dip, C.goldDark || C.gold);
+    meshFace(M, [faceTris(rimIn, [])], yf + dir*dip, C.gold);
+  }
+  _mk = prev;
 }
 
 /* ---------- сборка ---------- */
@@ -4756,6 +4795,7 @@ function buildMesh(m, engSet){
   M.lidN = M.p.length;
   M.hingeAx = [K.knuckle_x, m.T];
   meshHalf(M, m, 2, null, C);
+  coinMeshInsert(M, m, C);
   // Стол: одна плоскость под деталью. Нужен ровно для того, чтобы в объёме
   // не терялся низ — деталь крутится свободно, и без опоры не понять, чем
   // она ляжет. В файл модели плоскость не уходит.
@@ -4787,14 +4827,15 @@ const D3 = {
   buf2:null, count2:0, ctr2:[0,0,0], rad2:60, box2:null, pip:false, pipRect:null
 };
 const D3_VS = [
-  "attribute vec3 aPos; attribute vec3 aNor; attribute vec3 aCol;",
+  "attribute vec3 aPos; attribute vec3 aNor; attribute vec3 aCol; attribute float aAlp;",
   "uniform mat4 uMVP; uniform mat3 uNM;",
-  "varying vec3 vN; varying vec3 vC;",
-  "void main(){ vN = uNM*aNor; vC = aCol; gl_Position = uMVP*vec4(aPos,1.0); }"
+  "varying vec3 vN; varying vec3 vC; varying float vA;",
+  "void main(){ vN = uNM*aNor; vC = aCol; vA = aAlp;",
+  "             gl_Position = uMVP*vec4(aPos,1.0); }"
 ].join("\n");
 const D3_FS = [
   "precision mediump float;",
-  "varying vec3 vN; varying vec3 vC;",
+  "varying vec3 vN; varying vec3 vC; varying float vA;",
   "void main(){",
   "  vec3 n = normalize(vN);",
   "  if(!gl_FrontFacing) n = -n;",
@@ -4802,7 +4843,11 @@ const D3_FS = [
   "  float d = max(dot(n, L), 0.0);",
   "  float b = 0.34 + 0.60*d;",
   "  float sp = pow(max(dot(reflect(-L, n), vec3(0.0,0.0,1.0)), 0.0), 26.0)*0.16;",
-  "  gl_FragColor = vec4(vC*b + sp, 1.0);",
+  "  // Стекло на просвет: чем круче грань к взгляду, тем оно плотнее — без",
+  "  // этого прозрачный корпус выглядит плёнкой, а не пластиком.",
+  "  float fres = pow(1.0 - abs(n.z), 2.0);",
+  "  float a = vA >= 0.999 ? 1.0 : clamp(vA + fres*0.42, 0.0, 1.0);",
+  "  gl_FragColor = vec4((vC*b + sp)*a, a);",
   "}"
 ].join("\n");
 
@@ -4856,11 +4901,15 @@ function d3Init(){
     aPos: gl.getAttribLocation(prog, "aPos"),
     aNor: gl.getAttribLocation(prog, "aNor"),
     aCol: gl.getAttribLocation(prog, "aCol"),
+    aAlp: gl.getAttribLocation(prog, "aAlp"),
     uMVP: gl.getUniformLocation(prog, "uMVP"),
     uNM:  gl.getUniformLocation(prog, "uNM")
   };
-  D3.buf = {p:gl.createBuffer(), n:gl.createBuffer(), c:gl.createBuffer()};
+  D3.buf = {p:gl.createBuffer(), n:gl.createBuffer(), c:gl.createBuffer(),
+            a:gl.createBuffer()};
   gl.enable(gl.DEPTH_TEST);
+  // Смешивание с ПРЕДУМНОЖЕННОЙ альфой: шейдер уже умножил цвет на неё.
+  gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   d3Bind(cv);
   return true;
 }
@@ -4994,25 +5043,42 @@ function d3Paint(ev){
 // Меш для окошка в углу. Буферы отдельные — большая модель остаётся на месте.
 function d3Upload2(M){
   const gl = D3.gl; if(!gl) return;
-  if(!D3.buf2) D3.buf2 = {p:gl.createBuffer(), n:gl.createBuffer(), c:gl.createBuffer()};
+  if(!D3.buf2) D3.buf2 = {p:gl.createBuffer(), n:gl.createBuffer(),
+                          c:gl.createBuffer(), a:gl.createBuffer()};
   const set = (b, arr) => {
     gl.bindBuffer(gl.ARRAY_BUFFER, b);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(arr), gl.STATIC_DRAW);
   };
   set(D3.buf2.p, M.p); set(D3.buf2.n, M.n); set(D3.buf2.c, M.c);
+  set(D3.buf2.a, meshAlpha(M));
+  D3.buf2.opaqueN = (M.opaqueN === undefined) ? M.p.length/3 : M.opaqueN;
   D3.count2 = M.p.length/3;
-  // Кадр берётся по ДЕТАЛИ, а не по вкладышу: карточка вчетверо длиннее
-  // подставки, и по ней камера отъезжала так, что сама подставка становилась
-  // щепкой в углу. Тот же приём, что и со столом.
+  // Кадр берётся по ДЕТАЛИ и по вкладышу, но вкладыш учитывается ВПОЛСИЛЫ:
+  // карточка вчетверо длиннее подставки, и по ней одной камера отъезжала так,
+  // что сама подставка становилась щепкой в углу, а без неё её обрезало
+  // кромкой окна. Половина запаса устраивает и то и другое.
   let x0=1e9,y0=1e9,z0=1e9,x1=-1e9,y1=-1e9,z1=-1e9;
+  let ix0=1e9,iy0=1e9,iz0=1e9,ix1=-1e9,iy1=-1e9,iz1=-1e9, nIns=0;
   const K = M.k || [];
   for(let i=0;i<M.p.length;i+=3){
-    if(K[(i/9)|0] === "ins") continue;
+    if(K[(i/9)|0] === "ins"){
+      nIns++;
+      if(M.p[i]<ix0)ix0=M.p[i];     if(M.p[i]>ix1)ix1=M.p[i];
+      if(M.p[i+1]<iy0)iy0=M.p[i+1]; if(M.p[i+1]>iy1)iy1=M.p[i+1];
+      if(M.p[i+2]<iz0)iz0=M.p[i+2]; if(M.p[i+2]>iz1)iz1=M.p[i+2];
+      continue;
+    }
     if(M.p[i]<x0)x0=M.p[i];     if(M.p[i]>x1)x1=M.p[i];
     if(M.p[i+1]<y0)y0=M.p[i+1]; if(M.p[i+1]>y1)y1=M.p[i+1];
     if(M.p[i+2]<z0)z0=M.p[i+2]; if(M.p[i+2]>z1)z1=M.p[i+2];
   }
   if(x1 < x0){ x0=y0=z0=-1; x1=y1=z1=1; }
+  if(nIns){
+    const H = 1.0;                          // вкладыш входит в кадр целиком
+    x0 = Math.min(x0, x0 + (ix0 - x0)*H); x1 = Math.max(x1, x1 + (ix1 - x1)*H);
+    y0 = Math.min(y0, y0 + (iy0 - y0)*H); y1 = Math.max(y1, y1 + (iy1 - y1)*H);
+    z0 = Math.min(z0, z0 + (iz0 - z0)*H); z1 = Math.max(z1, z1 + (iz1 - z1)*H);
+  }
   D3.ctr2 = [(x0+x1)/2, (y0+y1)/2, (z0+z1)/2];
   D3.rad2 = Math.max(Math.hypot(x1-x0, y1-y0, z1-z0)/2, 1);
   D3.box2 = [x0,y0,z0,x1,y1,z1];
@@ -5037,7 +5103,15 @@ function meshPose(M, ang){
     nr[i]   = ux*c - uy*sn;
     nr[i+1] = ux*sn + uy*c;
   }
-  return {p:p, n:nr, c:M.c, k:M.k, lidN:n, hingeAx:M.hingeAx};
+  return {p:p, n:nr, c:M.c, k:M.k, a:M.a, opaqueN:M.opaqueN,
+          lidN:n, hingeAx:M.hingeAx};
+}
+/* Альфа на вершину. У мешей, собранных не нами (STL точной модели), её нет
+   вовсе — тогда всё непрозрачно. */
+function meshAlpha(M){
+  const n = M.p.length/3;
+  if(M.a && M.a.length === n) return M.a;
+  const out = new Float32Array(n); out.fill(1); return out;
 }
 function d3Upload(M){
   const gl = D3.gl; if(!gl) return;
@@ -5046,19 +5120,35 @@ function d3Upload(M){
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(arr), gl.STATIC_DRAW);
   };
   set(D3.buf.p, M.p); set(D3.buf.n, M.n); set(D3.buf.c, M.c);
+  set(D3.buf.a, meshAlpha(M));
+  D3.buf.opaqueN = (M.opaqueN === undefined) ? M.p.length/3 : M.opaqueN;
   D3.count = M.p.length/3;
-  // Кадр берётся по ДЕТАЛИ, а не по вкладышу: карточка вчетверо длиннее
-  // подставки, и по ней камера отъезжала так, что сама подставка становилась
-  // щепкой в углу. Тот же приём, что и со столом.
+  // Кадр берётся по ДЕТАЛИ и по вкладышу, но вкладыш учитывается ВПОЛСИЛЫ:
+  // карточка вчетверо длиннее подставки, и по ней одной камера отъезжала так,
+  // что сама подставка становилась щепкой в углу, а без неё её обрезало
+  // кромкой окна. Половина запаса устраивает и то и другое.
   let x0=1e9,y0=1e9,z0=1e9,x1=-1e9,y1=-1e9,z1=-1e9;
+  let ix0=1e9,iy0=1e9,iz0=1e9,ix1=-1e9,iy1=-1e9,iz1=-1e9, nIns=0;
   const K = M.k || [];
   for(let i=0;i<M.p.length;i+=3){
-    if(K[(i/9)|0] === "ins") continue;
+    if(K[(i/9)|0] === "ins"){
+      nIns++;
+      if(M.p[i]<ix0)ix0=M.p[i];     if(M.p[i]>ix1)ix1=M.p[i];
+      if(M.p[i+1]<iy0)iy0=M.p[i+1]; if(M.p[i+1]>iy1)iy1=M.p[i+1];
+      if(M.p[i+2]<iz0)iz0=M.p[i+2]; if(M.p[i+2]>iz1)iz1=M.p[i+2];
+      continue;
+    }
     if(M.p[i]<x0)x0=M.p[i];     if(M.p[i]>x1)x1=M.p[i];
     if(M.p[i+1]<y0)y0=M.p[i+1]; if(M.p[i+1]>y1)y1=M.p[i+1];
     if(M.p[i+2]<z0)z0=M.p[i+2]; if(M.p[i+2]>z1)z1=M.p[i+2];
   }
   if(x1 < x0){ x0=y0=z0=-1; x1=y1=z1=1; }
+  if(nIns){
+    const H = 1.0;                          // вкладыш входит в кадр целиком
+    x0 = Math.min(x0, x0 + (ix0 - x0)*H); x1 = Math.max(x1, x1 + (ix1 - x1)*H);
+    y0 = Math.min(y0, y0 + (iy0 - y0)*H); y1 = Math.max(y1, y1 + (iy1 - y1)*H);
+    z0 = Math.min(z0, z0 + (iz0 - z0)*H); z1 = Math.max(z1, z1 + (iz1 - z1)*H);
+  }
   D3.ctr = [(x0+x1)/2, (y0+y1)/2, (z0+z1)/2];
   D3.rad = Math.max(Math.hypot(x1-x0, y1-y0, z1-z0)/2, 1);
   D3.box = [x0,y0,z0,x1,y1,z1];
@@ -5114,9 +5204,9 @@ function d3Draw(){
   const a = D3.yaw*Math.PI/180, b = D3.pitch*Math.PI/180;
   const dir = [Math.cos(b)*Math.sin(a), Math.sin(b), Math.cos(b)*Math.cos(a)];
   const right = v3n(v3c([0,1,0], dir)), up = v3c(dir, right);
-  const attr = (loc, buf) => { if(loc < 0) return;
+  const attr = (loc, buf, n) => { if(loc < 0) return;
     gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.enableVertexAttribArray(loc);
-    gl.vertexAttribPointer(loc, 3, gl.FLOAT, false, 0, 0); };
+    gl.vertexAttribPointer(loc, n || 3, gl.FLOAT, false, 0, 0); };
 
   // Одна и та же сцена рисуется в две области холста. Поворот и приближение
   // общие: окно в углу должно показывать ТО ЖЕ, только другой моделью.
@@ -5131,7 +5221,17 @@ function d3Draw(){
     gl.uniformMatrix3fv(D3.loc.uNM, false,
       new Float32Array([V[0],V[1],V[2], V[4],V[5],V[6], V[8],V[9],V[10]]));
     attr(D3.loc.aPos, buf.p); attr(D3.loc.aNor, buf.n); attr(D3.loc.aCol, buf.c);
-    gl.drawArrays(gl.TRIANGLES, 0, count);
+    attr(D3.loc.aAlp, buf.a || buf.c, buf.a ? 1 : 3);
+    // Два прохода: сперва непрозрачное с записью глубины, потом стекло
+    // холдера — со смешиванием и БЕЗ записи глубины, иначе оно закрыло бы
+    // само себя и карточку внутри.
+    const op = (buf.opaqueN === undefined) ? count : Math.min(buf.opaqueN, count);
+    gl.drawArrays(gl.TRIANGLES, 0, op);
+    if(count > op){
+      gl.enable(gl.BLEND); gl.depthMask(false);
+      gl.drawArrays(gl.TRIANGLES, op, count - op);
+      gl.depthMask(true); gl.disable(gl.BLEND);
+    }
     if(main){ D3.eye = eye; D3.basis = {right, up, dir, fov, asp}; }
   };
 
@@ -6618,7 +6718,9 @@ function paintBtnIcons(){
 function setHint(m){
   const L = layoutText(m);
   const legend = [["var(--hollow)", T_("lg_cav")], ["var(--brass-soft)", T_("lg_hinge")]];
-  if(state.show_coin) legend.push([coinCol().fill, T_("lg_coin")]);
+  // В кейсе для карточки лежит холдер, а не монета — и подпись своя.
+  if(state.show_coin) legend.push(state.insert_kind === 1
+    ? ["var(--holder)", T_("cc_holder")] : [coinCol().fill, T_("lg_coin")]);
   const info = !state.text_enable ? T_("eng_off")
     : L.lines.length + " " + T_("lines_ab") + " · " + fmt(L.size) + " " + T_("mm")
       + (L.shrunk ? " · " + T_("shrunk") : "");
@@ -7711,6 +7813,180 @@ const CARD_PRESETS = [
   {k:"cgc",    w:80.0, h:135.0, t:6.5}
 ];
 
+/* ---------- как выглядит САМ холдер ----------
+   Мы делаем кейсы и подставки ПОД холдер, а на видах он до сих пор был
+   безликим прямоугольником. Холдеры разные, и разница видна сразу:
+
+   • топлоадер — жёсткий ПВХ-конверт, заварен по двум длинным кромкам и низу,
+     СВЕРХУ ОТКРЫТ, у устья чуть расширен, чтобы карточка входила;
+   • one-touch — две акриловые половинки на магнитах: срезанные под 45° углы,
+     широкая рамка и два магнита у верхней кромки;
+   • слаб (PSA, CGC, SGC, BGS) — заваренная капсула: ЯРЛЫК сверху с номером и
+     оценкой, ниже окно с карточкой; у BGS ярлык выше — там подоценки, у SGC
+     внутри чёрная рамка.
+
+   Форма описана ОДИН раз, отсюда её берут и объём, и чертежи, и врезка.
+   Оси местные: x поперёк, z вверх, начало в середине холдера. */
+const HOLDER_FAM = {
+  bare:"card", sleeve:"sleeve",
+  top35:"top", top55:"top", top100:"top", top130:"top",
+  one35:"one", psa:"psa", cgc:"psa", sgc:"sgc", bgs:"bgs"
+};
+const CARD_MM = {w:63.5, h:88.9, r:3.0};   // обычная коллекционная карточка
+/* Своему размеру семейство не задано — угадываем по пропорциям. Иначе форма
+   пропадала ровно тогда, когда человек тронул ползунок. */
+function holderFam(preset, W, H, T){
+  const f = HOLDER_FAM[preset];
+  if(f) return f;
+  if(H > W*1.55 && T >= 4) return "psa";
+  if(T >= 4.5) return "one";
+  if(T <= 1.3 && W <= 70) return "card";
+  return "top";
+}
+function holderShape(src, preset){
+  const W = Math.max(src.holder_w || 1, 1), H = Math.max(src.holder_h || 1, 1);
+  const T = Math.max(src.holder_t || 0.4, 0.2);
+  const fam = holderFam(preset, W, H, T);
+  const S = {fam, W, H, T, r:2.0, cham:0, open:0, label:0, sub:false,
+             black:false, mags:[], well:null, bare:false};
+  if(fam === "card"){
+    S.r = CARD_MM.r; S.bare = true;
+  } else if(fam === "sleeve"){
+    S.r = 2.2; S.open = 2.6;
+    const g = Math.max(0.8, (W - CARD_MM.w)/2);
+    S.well = {l:g, r:g, t:0, b:Math.max(1.2, (H - CARD_MM.h))};
+  } else if(fam === "top"){
+    // Заварены три кромки, четвёртая — устье. Ширина шва у настоящего
+    // топлоадера около трёх миллиметров.
+    S.r = 1.6; S.open = Math.min(3.6, H*0.05);
+    const g = Math.max(2.4, Math.min((W - CARD_MM.w)/2, 6));
+    S.well = {l:g, r:g, t:0, b:Math.max(3.0, g*1.25)};
+  } else if(fam === "one"){
+    S.cham = Math.min(9, Math.min(W, H)*0.10);
+    const fr = Math.max(5.0, Math.min((W - CARD_MM.w)/2 - 0.8, 12));
+    S.well = {l:fr, r:fr, t:fr, b:fr};
+    const mw = Math.min(11, W*0.15), mh = Math.min(4.6, fr*0.8);
+    const my = H/2 - S.cham*0.55 - mh/2;
+    S.mags = [[-W/2 + S.cham*0.55 + mw/2, my, mw, mh],
+              [ W/2 - S.cham*0.55 - mw/2, my, mw, mh]];
+  } else {                                   // psa | sgc | bgs
+    S.r = 3.4;
+    S.label = (fam === "bgs" ? Math.min(H*0.30, 42) : Math.min(H*0.235, 34));
+    S.sub = (fam === "bgs");
+    S.black = (fam === "sgc");
+    const fr = Math.max(3.5, Math.min((W - CARD_MM.w)/2 - 1.6, 10));
+    S.well = {l:fr, r:fr, t:S.label + 2.2, b:fr + 1.5};
+  }
+  // Окно и условная карточка в нём.
+  const cw = Math.min(CARD_MM.w, W - 2), chh = Math.min(CARD_MM.h, H - 2);
+  S.card = {w:cw, h:chh, r:CARD_MM.r, cx:0, cy:0};
+  if(S.bare){ S.card = {w:W, h:H, r:S.r, cx:0, cy:0}; S.win = null; }
+  else {
+    const x0 = -W/2 + S.well.l, x1 = W/2 - S.well.r;
+    const y0 = -H/2 + S.well.b, y1 = H/2 - S.well.t;
+    S.win = {x0:Math.min(x0, x1 - 1), x1:Math.max(x1, x0 + 1),
+             y0:Math.min(y0, y1 - 1), y1:Math.max(y1, y0 + 1)};
+    S.card.w = Math.min(S.card.w, S.win.x1 - S.win.x0);
+    S.card.h = Math.min(S.card.h, S.win.y1 - S.win.y0);
+    S.card.cx = (S.win.x0 + S.win.x1)/2;
+    S.card.cy = (S.win.y0 + S.win.y1)/2;
+    // У открытого сверху холдера карточка прижата книзу, а не по центру:
+    // так она и лежит.
+    if(S.open > 0) S.card.cy = S.win.y0 + S.card.h/2;
+  }
+  return S;
+}
+/* ---------- холдер на чертежах ----------
+   Тот же силуэт, что и в объёме, только плоскими средствами: полупрозрачный
+   тон корпуса, окно, ярлык, магниты и условная карточка внутри. Рисуется в
+   любой проекции: на плане толщина вырождается и остаётся одно лицо, в
+   изометрии добавляются боковины. */
+function holderPaint(g, P0, S, cls, put){
+  const sw = cls.sw || 1;
+  // put кладёт МЕСТНЫЕ оси холдера (x поперёк, y по толщине 0…T, z вверх от
+  // низа) в оси вида. Те же, что и в объёме, — форма одна на всё.
+  const ring = (r, w) => r.map(q => {
+    const t = put(q[0], w, q[1] + S.H/2);
+    return pj(P0, t[0], t[1], t[2]);
+  });
+  const shape = (pts, fill, stroke, extra) => el("polygon", Object.assign({
+      points:pstr(pts), fill:fill || "none", stroke:stroke || "none",
+      "stroke-width":fmt(sw*0.85), "stroke-linejoin":"round",
+      "pointer-events":"none"}, extra || {}), g);
+  const T = Math.max(S.T, 0.01), wTop = T;
+  const prof = holderProfile(S);
+  const PL = "var(--holder)", ED = "var(--holder-edge)";
+  // Боковины: только те, что смотрят на зрителя.
+  const lo = ring(prof, 0), hi = ring(prof, wTop);
+  for(let i=0;i<prof.length;i++){
+    const j = (i+1)%prof.length;
+    const q = [lo[i], lo[j], hi[j], hi[i]];
+    if(sArea(q) <= 0) continue;
+    shape(q, PL, ED, {"fill-opacity":"0.55"});
+  }
+  // Карточка внутри — на середине толщины, поэтому её видно сквозь лицо.
+  const wc = T*0.5;
+  const cardR = rrectRing(S.card.w, S.card.h, S.card.r)
+                  .map(q => [q[0] + S.card.cx, q[1] + S.card.cy]);
+  if(S.black && S.win)
+    shape(ring(rectRing2(S.win.x0, S.win.y0, S.win.x1, S.win.y1, 1.6), wc - 0.02),
+        "var(--ink)", "none", {"fill-opacity":"0.85"});
+  shape(ring(cardR, wc), "var(--card-stock)", "var(--card-edge)");
+  const aw = S.card.w*0.80, ah = S.card.h*0.52;
+  if(aw > 2 && ah > 2)
+    shape(ring(rrectRing(aw, ah, 1.2)
+          .map(q => [q[0] + S.card.cx, q[1] + S.card.cy + S.card.h*0.12]), wc),
+        "var(--card-art)", "none", {"fill-opacity":"0.9"});
+  const bw2 = S.card.w*0.62, bh2 = Math.min(3.2, S.card.h*0.06);
+  if(bw2 > 2 && bh2 > 0.6)
+    shape(ring(rrectRing(bw2, bh2, 0.5)
+          .map(q => [q[0] + S.card.cx, q[1] + S.card.cy - S.card.h*0.33]), wc),
+        "var(--ink-dim)", "none", {"fill-opacity":"0.55"});
+  // Ярлык слаба и магниты one-touch лежат под самым лицом.
+  const wIn = T*0.86;
+  if(S.label > 0){
+    const lf = Math.max(2.0, S.well ? S.well.l*0.8 : 3);
+    const ly1 = S.H/2 - 2.0, ly0 = ly1 - (S.label - 3.2);
+    shape(ring(rectRing2(-S.W/2 + lf, ly0, S.W/2 - lf, ly1, 1.2), wIn),
+        "var(--label)", "var(--card-edge)");
+    const bw = (S.W - 2*lf)*0.34, bh = Math.min(4.0, (ly1 - ly0)*0.30);
+    shape(ring(rrectRing(bw, bh, 0.4)
+          .map(q => [q[0] + (S.W/2 - lf) - bw/2 - 1.6, q[1] + ly0 + bh/2 + 1.2]), wIn),
+        "var(--ink)", "none", {"fill-opacity":"0.72"});
+    if(S.sub)
+      shape(ring(rectRing2(-S.W/2 + lf + 1.2, ly0 + 1.0, S.W/2 - lf - 1.2,
+                         ly0 + 1.0 + Math.min(6, (ly1 - ly0)*0.34), 0.8), wIn),
+          "var(--card-art)", "none", {"fill-opacity":"0.75"});
+    // Строки на ярлыке — намёком, чтобы читалось «тут номер и оценка».
+    for(let i=0;i<2;i++)
+      shape(ring(rectRing2(-S.W/2 + lf + 1.6, ly1 - 3.4 - i*3.2,
+                          S.W/2 - lf - (i ? 12 : 4), ly1 - 2.1 - i*3.2, 0.5), wIn),
+          "var(--ink-dim)", "none", {"fill-opacity":"0.45"});
+  }
+  for(const q of S.mags)
+    shape(ring(rrectRing(q[2], q[3], 1.0).map(z => [z[0] + q[0], z[1] + q[1]]), wIn),
+        "var(--ink)", "none", {"fill-opacity":"0.55"});
+  // Лицо корпуса поверх всего — оно и делает пластик пластиком.
+  if(!S.bare)
+    shape(hi, PL, ED, {"fill-opacity":"0.34", "stroke-width":fmt(sw*1.1)});
+  // Окно: тонкая линия ступеньки, по ней видно, где карточка садится.
+  if(S.win && !S.bare)
+    shape(ring(rectRing2(S.win.x0, S.win.y0, S.win.x1, S.win.y1,
+                       Math.min(2, S.r)), wTop), "none", ED,
+        {"stroke-width":fmt(sw*0.7), opacity:"0.75"});
+}
+/* Контур холдера: скруглённый прямоугольник или восьмиугольник со срезами. */
+function holderRing(S, grow){
+  const g = grow || 0;
+  if(S.cham > 0){
+    const x = S.W/2 + g, y = S.H/2 + g, c = Math.max(S.cham - g*0.4, 0.4);
+    return [[-x+c,-y],[x-c,-y],[x,-y+c],[x,y-c],[x-c,y],[-x+c,y],[-x,y-c],[-x,-y+c]];
+  }
+  return rrectRing(S.W + 2*g, S.H + 2*g, Math.max(S.r + g, 0.2));
+}
+const rectRing2 = (x0, y0, x1, y1, r) =>
+  rrectRing(x1 - x0, y1 - y0, r || 0).map(q => [q[0] + (x0+x1)/2, q[1] + (y0+y1)/2]);
+
 const cardState = {
   card_type:0, preset:"top35",
   holder_w:76.2, holder_h:101.6, holder_t:1.6, holder_fit:0.35,
@@ -8361,104 +8637,162 @@ function shelfDoveSlices(m, side, grow, h){
   }
   return out;
 }
-/* ---------- болванка карточки ----------
-   То же, что монета у монетницы: показать, ЧТО встанет в изделие. Раньше
-   держатель рисовался только на плоских видах, а в объёме подставка стояла
-   пустой — понять, как в неё садится карточка, было нельзя.
-   Возвращает описание в осях файла: профиль в плоскости (глубина, высота)
-   и поперечный размер по X. */
-function cardInsGeom(m){
-  const s = cardState;
-  if(!s.show_holder) return null;
-  const hw = Math.min(s.holder_w, m.standW ? m.standW - 0.6 : s.holder_w)/2;
-  const hh = s.holder_h, lift = INS_LIFT;
-  const add = (a, b) => [a[0]+b[0], a[1]+b[1]];
-  const mul = (a, k) => [a[0]*k, a[1]*k];
-  if(m.ty === 3){
-    const gap = m.standGap;
-    const ht = Math.min(s.holder_t, Math.max(gap - 0.05, 0.2));
-    let O, up, nrm;
-    if(m.wedgeOn){
-      const w = m.wdg, t = w.t, ct = Math.cos(t), st = Math.sin(t);
-      // Дно паза — середина между его щеками на самой глубокой точке.
-      O = [(w.P5[0] + w.P6[0])/2, (w.P5[1] + w.P6[1])/2];
-      up = [-st, ct]; nrm = [ct, st];
-    } else {
-      const t = s.stand_tilt*Math.PI/180, ct = Math.cos(t), st = Math.sin(t);
-      const bwl = Math.max(m.wall*2, 3), gy = bwl + m.standGap/2;
-      O = [gy + m.standFloor*st, m.standFloor*ct];
-      up = [st, ct]; nrm = [ct, -st];
-    }
-    const B0 = add(O, mul(up, lift));
-    const A = add(B0, mul(nrm, -ht/2)), Bp = add(B0, mul(nrm, ht/2));
-    return {prof:[A, Bp, add(Bp, mul(up, hh)), add(A, mul(up, hh))],
-            x0:-hw, x1:hw, xf:true,
-            spot:add(B0, mul(up, hh)), up:up};
-  }
-  return null;
+/* ---------- сам холдер во вкладыше ----------
+   То же, что монета у монетницы: показать, ЧТО встанет в изделие. Только
+   холдер — не брусок: у топлоадера открыто устье, у one-touch срезаны углы и
+   стоят магниты, у слаба сверху ярлык. Форму берём из holderShape, корпус
+   рисуем полупрозрачным, а карточку внутри — плотной: сквозь пластик её и
+   должно быть видно. */
+function holderCols(){
+  // Палитра ОДНА с чертежами: объём и виды обязаны показывать один предмет.
+  return {
+    plastic: material(cssRGB("var(--holder)")),
+    card:    material(cssRGB("var(--card-stock)")),
+    art:     material(cssRGB("var(--card-art)")),
+    label:   material(cssRGB("var(--label)")),
+    dark:    [0.13, 0.14, 0.15],
+    bar:     [0.24, 0.25, 0.27]
+  };
 }
-/* Болванка в осях (x, z) и по толщине y — для рамки и створчатых. */
-function cardInsSlabs(m){
+/* Контур корпуса. У открытого сверху холдера в верхней кромке вырезано
+   устье — по нему топлоадер и узнаётся с одного взгляда. */
+function holderProfile(S){
+  const ring = holderRing(S, 0);
+  if(!(S.open > 0) || !S.win) return ring;
+  const Y = S.H/2, yLo = Y - S.open, x0 = S.win.x0, x1 = S.win.x1;
+  const out = [];
+  for(let i=0;i<ring.length;i++){
+    const a = ring[i], b = ring[(i+1)%ring.length];
+    out.push(a);
+    // Верхняя кромка обходится справа налево — в неё и вставляем устье.
+    if(a[1] > Y - 1e-6 && b[1] > Y - 1e-6 && a[0] > b[0])
+      out.push([x1, Y], [x1, yLo], [x0, yLo], [x0, Y]);
+  }
+  return ringClean(out);
+}
+/* Меш холдера. Оси МЕСТНЫЕ: x поперёк, y по толщине (0…T), z вверх (0…H).
+   put кладёт их на место в детали. Две фазы: сперва всё плотное (карточка,
+   ярлык, магниты), потом полупрозрачный корпус — порядок держит второй
+   проход отрисовки. */
+function holderMeshPart(M, S, K, put, phase){
+  const save = M.xf;
+  M.xf = save ? (q => save(put(q))) : put;
+  const T = S.T, Z = S.H/2;
+  const up = a => a.map(q => [q[0], q[1] + Z]);
+  const prev = _mk; _mk = "ins";
+  if(phase === "in"){
+    _ma = 1;
+    const ct = Math.min(0.42, T*0.34);
+    const y0 = T/2 - ct/2, y1 = T/2 + ct/2;
+    // Чёрная подложка внутри слаба SGC — карточка лежит на ней.
+    if(S.black && S.win)
+      meshPrismY(M, up(rectRing2(S.win.x0, S.win.y0, S.win.x1, S.win.y1, 1.6)),
+                 y0 - 0.24, y0 - 0.02, K.dark);
+    // Условная карточка: светлое поле, картинка сверху и полоска снизу.
+    const cx = S.card.cx, cy = S.card.cy;
+    meshPrismY(M, up(rrectRing(S.card.w, S.card.h, S.card.r)
+                       .map(q => [q[0] + cx, q[1] + cy])), y0, y1, K.card);
+    const aw = S.card.w*0.80, ah = S.card.h*0.52;
+    const ay = cy + S.card.h*0.12;
+    if(aw > 2 && ah > 2)
+      meshPrismY(M, up(rrectRing(aw, ah, 1.2).map(q => [q[0] + cx, q[1] + ay])),
+                 y1, y1 + 0.06, K.art);
+    const sw = S.card.w*0.62, sh = Math.min(3.2, S.card.h*0.06);
+    if(sw > 2 && sh > 0.6)
+      meshPrismY(M, up(rrectRing(sw, sh, 0.5)
+                    .map(q => [q[0] + cx, q[1] + cy - S.card.h*0.33])),
+                 y1, y1 + 0.06, K.bar);
+    // Ярлык слаба: он ПОД пластиком, поэтому лежит чуть ниже лица.
+    if(S.label > 0){
+      const lf = Math.max(2.0, S.well ? S.well.l*0.8 : 3);
+      const ly1 = S.H/2 - 2.0, ly0 = ly1 - (S.label - 3.2);
+      const ring = up(rectRing2(-S.W/2 + lf, ly0, S.W/2 - lf, ly1, 1.2));
+      meshPrismY(M, ring, T - 0.42, T - 0.10, K.label);
+      // Штрихкод и полоса подоценок — по ним слаб и читается слабом.
+      const bw = (S.W - 2*lf)*0.34, bh = Math.min(4.0, (ly1 - ly0)*0.30);
+      meshPrismY(M, up(rrectRing(bw, bh, 0.4)
+                    .map(q => [q[0] + (S.W/2 - lf) - bw/2 - 1.6, q[1] + ly0 + bh/2 + 1.2])),
+                 T - 0.10, T - 0.04, K.bar);
+      if(S.sub)
+        meshPrismY(M, up(rectRing2(-S.W/2 + lf + 1.2, ly0 + 1.0,
+                                    S.W/2 - lf - 1.2, ly0 + 1.0 + Math.min(6, (ly1-ly0)*0.34), 0.8)),
+                   T - 0.10, T - 0.04, K.art);
+    }
+    // Магниты one-touch — тоже внутри акрила.
+    for(const g of S.mags)
+      meshPrismY(M, up(rrectRing(g[2], g[3], 1.0).map(q => [q[0] + g[0], q[1] + g[1]])),
+                 T - 0.55, T - 0.12, K.bar);
+  } else if(!S.bare){
+    // Корпус: полупрозрачный пластик во всю толщину.
+    _ma = 0.30;
+    meshPrismY(M, up(holderProfile(S)), 0, T, K.plastic);
+    _ma = 1;
+  }
+  _mk = prev;
+  M.xf = save;
+}
+/* Куда положить холдер в каждом изделии. Список: у книжки гнёзд несколько. */
+function holderPlaces(m){
   const s = cardState;
   if(!s.show_holder) return [];
-  const out = [], ht = s.holder_t, lift = INS_LIFT;
-  if(m.ty === 0){
-    const y0 = m.backT + lift;
-    out.push({ring:rrectRing(s.holder_w, s.holder_h, Math.min(m.cr, 2))
-                    .map(q => [q[0], q[1] + m.bandOff]),
-              y0, y1:y0 + ht});
+  const S = holderShape(s, s.preset);
+  const out = [];
+  if(m.ty === 3){
+    const g = standSlotFrame(m);
+    if(!g) return [];
+    const O = g.O, u = g.up, n = g.nrm;
+    out.push({S, put:q => [q[0],
+        O[0] + q[2]*u[0] + (q[1] - S.T/2)*n[0],
+        O[1] + q[2]*u[1] + (q[1] - S.T/2)*n[1]]});
+  } else if(m.ty === 0){
+    const y0 = m.backT + INS_LIFT, cz = m.bandOff;
+    out.push({S, put:q => [q[0], y0 + q[1], cz - S.H/2 + q[2]]});
   } else if(m.hinged){
-    // Карточка лежит в гнёздах ОСНОВАНИЯ: крышка накрывает её сверху.
-    const x0 = m.p2x, dir = -1;
+    const x0 = m.p2x, dir = -1, y0 = m.T - m.dBase + INS_LIFT;
     for(let i=0;i<m.cols;i++) for(let j=0;j<m.rows;j++){
       const cx = x0 + dir*(m.wall + m.PW/2 + i*(m.PW + s.slot_gap));
       const cz = m.wall + m.PH/2 + j*(m.PH + s.slot_gap);
-      const y0 = m.T - m.dBase + lift;
-      out.push({ring:rrectRing(s.holder_w, s.holder_h, Math.min(m.slotR, 2))
-                      .map(q => [cx + q[0], cz + q[1]]),
-                y0, y1:y0 + ht});
+      out.push({S, put:q => [cx + q[0], y0 + q[1], cz - S.H/2 + q[2]]});
     }
   }
   return out;
 }
+/* Паз подставки: начало (дно паза), «вверх» и «наружу» в осях профиля. */
+function standSlotFrame(m){
+  const s = cardState;
+  if(m.wedgeOn){
+    const w = m.wdg, t = w.t, ct = Math.cos(t), st = Math.sin(t);
+    return {O:[(w.P5[0] + w.P6[0])/2 - st*INS_LIFT, (w.P5[1] + w.P6[1])/2 + ct*INS_LIFT],
+            up:[-st, ct], nrm:[ct, st]};
+  }
+  const t = s.stand_tilt*Math.PI/180, ct = Math.cos(t), st = Math.sin(t);
+  const bwl = Math.max(m.wall*2, 3), gy = bwl + m.standGap/2;
+  return {O:[gy + m.standFloor*st + st*INS_LIFT, m.standFloor*ct + ct*INS_LIFT],
+          up:[st, ct], nrm:[ct, -st]};
+}
 /* Точка над вкладышем и его «вверх» — уже в осях просмотрщика. */
 function cardInsSpot(m){
-  const s = cardState;
-  if(!s.show_holder) return null;
+  const pl = holderPlaces(m);
+  if(!pl.length) return null;
+  const S = pl[0].S, put = pl[0].put;
+  const c = put([0, S.T/2, S.H/2]);            // середина холдера
+  const u = put([0, S.T/2, S.H/2 + 1]);
+  const up = [u[0]-c[0], u[1]-c[1], u[2]-c[2]];
   if(m.ty === 3){
-    const g = cardInsGeom(m);
-    if(!g) return null;
-    // Рукоятка садится на СЕРЕДИНУ карточки, а не на её макушку: карточка
-    // вчетверо длиннее подставки, и от макушки шайба уезжала за край окна.
     // Подставка ставится на стол общим преобразованием меша: (x, z, −y).
-    const mid = [g.spot[0] - g.up[0]*s.holder_h/2,
-                 g.spot[1] - g.up[1]*s.holder_h/2];
-    return {p:[0, mid[1], -mid[0]], up:[0, g.up[1], -g.up[0]],
-            r:Math.max(s.holder_w, 8)/2};
+    return {p:[c[0], c[2], -c[1]], up:[up[0], up[2], -up[1]],
+            r:Math.max(S.W, 8)/2};
   }
-  const sl = cardInsSlabs(m);
-  if(!sl.length) return null;
-  const r = sl[0].ring;
-  let cx = 0, cz = 0;
-  for(const q of r){ cx += q[0]; cz += q[1]; }
-  cx /= r.length; cz /= r.length;
-  return {p:[cx, sl[0].y1, cz], up:[0,1,0], r:Math.max(s.holder_w, 8)/2};
+  return {p:c, up, r:Math.max(S.W, 8)/2};
 }
-/* Сама болванка в меше. Ключ "ins" — по нему за неё берутся лучом и красят. */
+/* Вкладыш в меше. Сперва всё плотное, потом стекло — этот порядок и держит
+   двухпроходную отрисовку. */
 function cardMeshInsert(M, m, C){
-  // Лицо карточки светлее кромок: сплошной золотой брусок читался как
-  // деталь корпуса, а не как то, что в неё кладут.
-  const col = mix(C.gold, [1,1,1], 0.34), side = C.goldDark || C.gold;
-  const g = cardInsGeom(m);
-  const prev = _mk; _mk = "ins";
-  if(g) meshPrismX(M, g.prof, g.x0, g.x1, col);
-  for(const sl of cardInsSlabs(m)){
-    const ring = ringClean(sl.ring);
-    meshWall(M, ring, sl.y0, sl.y1, side);
-    const tr = faceTris(ring, []);
-    meshFace(M, [tr], sl.y0, col); meshFace(M, [tr], sl.y1, col);
-  }
-  _mk = prev;
+  const pl = holderPlaces(m);
+  const K = holderCols();
+  for(const q of pl) holderMeshPart(M, q.S, K, q.put, "in");
+  M.opaqueN = M.p.length/3;
+  for(const q of pl) holderMeshPart(M, q.S, K, q.put, "shell");
 }
 function cardMeshStand(M, m, C){
   const s = cardState, col = C.base;
@@ -8747,6 +9081,8 @@ function cardViewPlan(host, rect, m){
          "var(--hollow)", "var(--part-edge)", {"stroke-dasharray": sw*4+" "+sw*3});
     poly(rrectRing(m.PW-2*m.lip, m.PH-2*m.lip, Math.min(m.cr,2))
          .map(q => off([q[0], q[1]+m.bandOff])), "var(--hollow-side)", "var(--part-edge)");
+    // Сам холдер: за ним рамка и делается, а на плане его до сих пор не было.
+    holderFlat(g, P0, m, {sw});
     // Вход для карточки. В модели он есть с самого начала, но ни на плане, ни
     // в объёме его не рисовали — и рамка читалась наглухо закрытой коробкой.
     const mouth = frameMouthRect(m);
@@ -8849,6 +9185,14 @@ function cardViewPlan(host, rect, m){
         const cz = m.wall + m.PH/2 + j*(m.PH + s.slot_gap) - m.H/2;
         poly(rrectRing(m.PW, m.PH, m.slotR).map(q => sh([q[0]+cx, q[1]+cz])),
              "var(--hollow)", "var(--part-edge)");
+        // Холдер лежит в гнёздах ОСНОВАНИЯ: крышка накрывает его сверху.
+        if(!isLid && s.show_holder){
+          const S = holderShape(s, s.preset);
+          holderPaint(g, P0, S, {sw}, (x, y, z) => {
+            const q = sh([x + cx, (z - S.H/2) + cz]);
+            return [q[0], q[1], 0];
+          });
+        }
       }
     }
     // Защёлка: губа на крышке сплошной линией, ответная выборка в
@@ -8929,6 +9273,14 @@ function cardViewIso(host, rect, m){
   const corners = [];
   for(const u of [u0-pad, u1+pad]) for(const v of [v0-pad, v1+pad])
     for(const w of [0, hi + pad*0.3]) corners.push(pj(P0,u,v,w));
+  // У подставки холдер торчит намного выше самой детали: если не заложить
+  // его в кадр, он упирался бы в кромку панели и обрезался. Сборка целиком —
+  // ровно то, ради чего подставку и смотрят.
+  if(m.ty === 3 && s.show_holder){
+    const S = holderShape(s, s.preset), f = standSlotFrame(m);
+    if(f) for(const x of [-S.W/2, S.W/2]) for(const z of [0, S.H])
+      corners.push(pj(P0, x, f.O[0] + z*f.up[0], f.O[1] + z*f.up[1]));
+  }
   const P = panel(host, rect, corners, P0,
                   m.hinged ? T_(isoMode === "closed" ? "v_iso_closed" : "v_iso_open")
                            : T_("viso"),
@@ -8979,6 +9331,8 @@ function cardViewIso(host, rect, m){
     pocket(win, m.FT, m.FT - m.backT);
     const mouth = frameMouthRect(m);
     if(mouth) pocket(mouth.map(q => [q[0], q[1] + m.FH/2]), m.FT, m.FT - m.backT);
+    // Холдер в кармане: сам предмет, ради которого рамка и делается.
+    holderIso(g, P0, m, cls);
   } else if(m.ty === 3){
     // Подставка стоит и собрана из ТОГО ЖЕ профиля, что уходит в файл:
     // профиль лежит в плоскости (глубина, высота) и протягивается поперёк на
@@ -9011,6 +9365,9 @@ function cardViewIso(host, rect, m){
         "data-paint":"lid",
         "stroke-width":cls.sw*0.9, "stroke-linejoin":"round"}, g);
     };
+    // Холдер идёт ПЕРЕД телом: ближняя щека нарисуется поверх и закроет
+    // его низ — тот, что и правда сидит в пазу.
+    holderIso(g, P0, m, cls);
     prismU(SP.sole);
     prismU(SP.wall);
     // Паз показан пунктиром на ближней щеке: в него въезжает держатель.
@@ -9076,9 +9433,48 @@ function cardViewIso(host, rect, m){
     }
     leaf(leaves[1]);
     latchOn(leaves[1][1] > 0);
+    holderIso(g, P0, m, cls);
   }
   cardIsoHandles(P, m, u0, u1, v1, hi);
   return P;
+}
+/* Холдер на ПЛАНЕ. Ось v на панели смотрит вниз, поэтому «вверх» холдера
+   идёт в минус: ярлык слаба должен быть сверху, как и в жизни. */
+function holderFlat(g, P0, m, cls){
+  const s = cardState;
+  if(!s.show_holder) return;
+  const S = holderShape(s, s.preset);
+  if(m.ty === 0){
+    const cy = m.FH/2 - m.bandOff;
+    holderPaint(g, P0, S, cls, (x, y, z) => [x, cy - (z - S.H/2), 0]);
+  }
+}
+/* Холдер в изометрии карточного изделия. Оси у каждого изделия свои, но
+   раскладка холдера одна: местные (поперёк, толщина, вверх) кладём туда,
+   где он и лежит. */
+function holderIso(g, P0, m, cls){
+  const s = cardState;
+  if(!s.show_holder) return;
+  const S = holderShape(s, s.preset);
+  const cl2 = {sw:cls.sw*1.1};
+  if(m.ty === 0){
+    const cy = m.FH/2 + m.bandOff, w0 = m.backT + INS_LIFT;
+    holderPaint(g, P0, S, cl2, (x, y, z) => [x, cy + z - S.H/2, w0 + y]);
+  } else if(m.ty === 3){
+    // Подставка: профиль лежит в (глубина, высота), поперёк идёт u.
+    const f = standSlotFrame(m);
+    if(!f) return;
+    holderPaint(g, P0, S, cl2, (x, y, z) => [x,
+      f.O[0] + z*f.up[0] + (y - S.T/2)*f.nrm[0],
+      f.O[1] + z*f.up[1] + (y - S.T/2)*f.nrm[1]]);
+  } else if(m.hinged){
+    const x0 = m.p2x, dir = -1, w0 = m.T - m.dBase + INS_LIFT;
+    for(let i=0;i<m.cols;i++) for(let j=0;j<m.rows;j++){
+      const cx = x0 + dir*(m.wall + m.PW/2 + i*(m.PW + s.slot_gap));
+      const cz = m.wall + m.PH/2 + j*(m.PH + s.slot_gap);
+      holderPaint(g, P0, S, cl2, (x, y, z) => [cx + x, cz + z - S.H/2, w0 + y]);
+    }
+  }
 }
 /* Рукоятки в изометрии. Раньше их тут не было вовсе: изометрия показывала
    деталь, но взяться за неё было нельзя, и любую высоту приходилось искать
@@ -9558,14 +9954,26 @@ function cardViewCut(host, rect, m){
           [c0,m.T-m.dLid],[c0,m.T],[0,m.T]], "lid");
     slab([[0,2*m.T],[m.W,2*m.T],[m.W,m.T],[c0+m.PW,m.T],[c0+m.PW,m.T+m.dBase],
           [c0,m.T+m.dBase],[c0,m.T],[0,m.T]], "base");
-    // держатель между створками
+    // Холдер между створками — в разрезе видно, из чего он сложен: пластик по
+    // краям и карточка в середине. Раньше тут лежал безликий золотой брусок.
     if(s.show_holder){
       // Держатель рисуем в тех же (спроецированных) координатах, что и срез:
       // зазор берём из настроек, в модели его отдельным полем нет.
-      const q = pj(P0, c0 + s.holder_fit, 0, m.T - m.dLid);
-      el("rect", {x:fmt(q[0]), y:fmt(q[1]), width:fmt(s.holder_w),
-        height:fmt(m.dLid + m.dBase), fill:"var(--gold)", opacity:"0.75",
-        stroke:"var(--gold-edge)", "stroke-width":sw*0.7}, g);
+      const S = holderShape(s, s.preset);
+      const x0 = c0 + s.holder_fit, w0 = m.T - m.dLid, th = m.dLid + m.dBase;
+      const bar = (a, b, y0, y1, fill, op) => {
+        const q = pj(P0, x0 + a, 0, w0 + y0);
+        const q2 = pj(P0, x0 + b, 0, w0 + y1);
+        el("rect", {x:fmt(Math.min(q[0],q2[0])), y:fmt(Math.min(q[1],q2[1])),
+          width:fmt(Math.abs(q2[0]-q[0])), height:fmt(Math.abs(q2[1]-q[1])),
+          fill, opacity:op, stroke:"var(--holder-edge)",
+          "stroke-width":sw*0.6, "pointer-events":"none"}, g);
+      };
+      bar(0, S.W, 0, th, "var(--holder)", "0.6");
+      // Карточка — по середине толщины и по ширине окна.
+      const cw = S.card.w, cx = S.W/2 + S.card.cx;
+      const ct = Math.max(th*0.34, 0.3), cy = th/2;
+      bar(cx - cw/2, cx + cw/2, cy - ct/2, cy + ct/2, "var(--card-stock)", "1");
     }
     // Защёлка в разрезе: губа крышки с валиком и ответное гнездо. Секущая
     // плоскость идёт по середине высоты — защёлка попадает в разрез только
