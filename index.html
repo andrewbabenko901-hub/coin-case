@@ -5214,6 +5214,17 @@ function screenDir(a, b){
 function knobDelta(dx, dy){
   return Math.abs(dx) >= Math.abs(dy) ? dx : -dy;
 }
+/* Кладём шайбу на её место в окне объёма и НЕ даём ей уехать за край: точка
+   привязки может оказаться далеко за кадром (карточка вчетверо длиннее
+   подставки), а взяться за рукоятку надо всегда. Поля разные сверху и снизу:
+   шайба нарисована выше точки привязки на 34 пикселя при высоте 52. */
+function knobPlace(kn, cv, sc){
+  const W = cv.clientWidth || 0, H = cv.clientHeight || 0;
+  const lo = 26, hi = Math.max(W - 26, lo);
+  const tLo = 34, tHi = Math.max(H - 18, tLo);
+  kn.style.left = (cv.offsetLeft + clamp(sc[0], lo, hi)) + "px";
+  kn.style.top  = (cv.offsetTop  + clamp(sc[1], tLo, tHi)) + "px";
+}
 /* Рукоятка у петли. Ставится ровно над осью, чуть в стороне от створки,
    чтобы не тонуть в детали, и живёт только там, где крышка есть. */
 function d3Knob(){
@@ -5227,9 +5238,7 @@ function d3Knob(){
   if(!sc){ kn.hidden = true; return; }
   const cv = D3.cv;
   kn.hidden = false;
-  const M = 26;
-  kn.style.left = (cv.offsetLeft + clamp(sc[0], M, Math.max(cv.clientWidth - M, M))) + "px";
-  kn.style.top  = (cv.offsetTop  + clamp(sc[1], M, Math.max(cv.clientHeight - M, M))) + "px";
+  knobPlace(kn, cv, sc);
   kn.title = T_("d3_lid") + " — " + lidLabel();
 }
 function lidLabel(){
@@ -5321,11 +5330,7 @@ function d3Lift(){
   if(!sc){ kn.hidden = true; return; }
   const cv = D3.cv;
   kn.hidden = false;
-  // Шайба не уходит за край окна: даже если точка привязки уехала, взяться
-  // за неё должно быть можно.
-  const M = 26;
-  kn.style.left = (cv.offsetLeft + clamp(sc[0], M, Math.max(cv.clientWidth - M, M))) + "px";
-  kn.style.top  = (cv.offsetTop  + clamp(sc[1], M, Math.max(cv.clientHeight - M, M))) + "px";
+  knobPlace(kn, cv, sc);
   kn.title = T_("d3_lift") + " — " + fmt(INS_LIFT) + " " + T_("mm");
 }
 function d3LiftBind(){
