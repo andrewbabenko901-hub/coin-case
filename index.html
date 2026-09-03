@@ -9620,13 +9620,13 @@ function buildCardText(){
   // обе — отсюда «с обеих сторон». У подставки надпись идёт на переднюю
   // стенку: другого ровного места на ней нет.
   const where = (s.card_type === 0)
-    ? [{v:0,n:T_("op_none")},{v:1,n:T_("tw_band_lo")},{v:2,n:T_("tw_band_hi")}]
+    ? [{v:0,n:T_("off")},{v:1,n:T_("tw_band_lo")},{v:2,n:T_("tw_band_hi")}]
     : (s.card_type === 3)
-    ? [{v:0,n:T_("op_none")}].concat(
+    ? [{v:0,n:T_("off")}].concat(
         Object.keys(standFaces(cardModel()))
           .map(Number).sort((a, b) => a - b)
           .map(v => ({v, n:T_(TW_FACE[standFaces(cardModel())[v].key])})))
-    : [{v:0,n:T_("op_none")},{v:3,n:T_("tw_lid")},{v:4,n:T_("tw_both")}];
+    : [{v:0,n:T_("off")},{v:3,n:T_("tw_lid")},{v:4,n:T_("tw_both")}];
   fSel(op, s, "text_where", T_("f_where"), where);
   fNum(op, s, "text_size", T_("f_size"), T_("mm"), 2, 30, 0.1);
   fNum(op, s, "text_line_pitch", T_("f_pitch"), "×", 1, 3, 0.01);
